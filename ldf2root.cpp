@@ -11,23 +11,6 @@
   *@param legacy Use legacy ROOT file output structure (optional)
 */
 
-/* 
-Elements from GenScan needed:
-Using GenScan.cpp as a reference for the main function structure and command line parsing
-// - DataParser from Translator.hpp: Class to handle file parsing and data extraction
-// - DataParser: Class to handle file parsing and data extraction
-// - ChannelMap: Class to manage channel configurations and parameters
-// - ConfigParser: Class to handle configuration file parsing
-// - Translator: Class to handle data translation and processing
-// - EventHistoryManager: Class to manage event history and buffer rotation
-
-EventHistory Manager - Primary element to manage events via the RotateBuffer method
-LDFPixieTranslator - Elements that handle file parsing up to the point of word translation to DDAS parameters
-    Most of the parsing logic will be in the LDFPixieTranslator, which will read the LDF file and extract the necessary data.
-At this point, link in DDASHitUnpacker to unpack the data into DDASHit objects
-Then fill those objects into an output ROOT file to complete the conversion
-*/
-
 // Include necessary system headers
 #include <iostream>
 #include <ostream>
