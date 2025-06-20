@@ -1,0 +1,14 @@
+new buffer at:
+0x009c2ce4
+E85C0000
+40000000
+
+
+# Segments 67
+words/segment - 8187*4 = 32748
++ seg len, total segs, seg# = 32760
+
+28272 - total length
+
+spill footer
+020000000f270000ffffffff
