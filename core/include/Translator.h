@@ -22,8 +22,6 @@
 // #include "ChannelMap.hpp"
 
 #include "DDASRootHit.h"
-#include "DDASRootEvent.h"
-
 
 /// @addtogroup Decoding
 /// @{
@@ -38,7 +36,7 @@ class Translator{
 		Translator(const std::string&,const std::string&);
 		virtual ~Translator();
 		virtual bool AddFile(const std::string&);
-		[[noreturn]] virtual TRANSLATORSTATE Parse([[maybe_unused]] std::vector<DDASRootHit>*);
+		[[noreturn]] virtual TRANSLATORSTATE Parse([[maybe_unused]] std::unique_ptr<std::vector<std::unique_ptr<DDASRootHit>>>&);
 		virtual void FinalizeFiles();
 		virtual bool OpenNextFile();
 
@@ -55,7 +53,7 @@ class Translator{
 		bool FinishedCurrentFile;
 
 		bool LastReadEvtWithin;
-		std::vector<std::deque<DDASRootHit>> CustomLeftovers;
+		std::vector<std::deque<std::unique_ptr<DDASRootHit>>> CustomLeftovers;
 		std::vector<std::deque<uint64_t>> LeftoverSpillIDs;
 		// boost::container::vector<boost::container::deque<PhysicsData>> CustomLeftovers;
 

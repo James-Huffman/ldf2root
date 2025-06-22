@@ -12,14 +12,16 @@
 */
 
 // Include necessary system headers
+#include <Compression.h>
+#include <cstddef>
 #include <iostream>
 #include <ostream>
 #include <string>
 #include <vector>
 #include <fstream>
 #include <sstream>
-#include <map>
 #include <chrono>
+#include <cmath>
 
 // Include necessary ROOT headers
 #include <TFile.h>
@@ -29,8 +31,6 @@
 
 // GenScan Classes
 
-#include "DataParser.h"
-
 #include <spdlog/common.h>
 #include <spdlog/spdlog.h>
 #include <spdlog/cfg/env.h>
@@ -38,12 +38,14 @@
 #include <spdlog/sinks/basic_file_sink.h>
 #include <spdlog/sinks/stdout_color_sinks.h>
 
+#include "DataParser.h"
+
 // Include additional user headers
 #include "InputParser.h"
 #include "DDASRootHit.h"
 #include "DDASRootEvent.h"
 
-void EventBuild(std::vector<DDASRootHit>* hitList, DDASRootEvent& rawEvent, ldf2root::CmdOptions opts, TBranch* hitBranch, const std::string& logname);
+void EventBuild(std::unique_ptr<std::vector<std::unique_ptr<DDASRootHit>>>& hitList, DDASRootEvent& rawEvent, ldf2root::CmdOptions opts, TBranch* hitBranch, const std::string& logname);
 
 void generate_default_config(const std::string& filename = "example_config.txt") {
     std::ofstream ofs(filename);
@@ -87,7 +89,7 @@ void parse_args(int argc, char* argv[], ldf2root::CmdOptions& opts) {
   }
   for (int i = 1; i < argc; ++i) {
     std::string arg = argv[i];
-    if (std::string(argv[i]) == "--generate-config") {
+    if (arg == "--generate-config") {
       generate_default_config();
       exit(0);
     } else if (arg == "--help" || arg == "-h") {
@@ -139,13 +141,13 @@ void parse_args(int argc, char* argv[], ldf2root::CmdOptions& opts) {
     exit(1);
   }
   // Check input file ends with .ldf
-  if (opts.input_files.at(0).size() < 4 || opts.input_files.at(0).substr(opts.input_files.size() - 4) != ".ldf") {
+  if (opts.input_files.at(0).size() < 4 || opts.input_files.at(0).substr(opts.input_files.at(0).size() - 4) != ".ldf") {
     std::cerr << "Input file must be of type .ldf." << std::endl;
     exit(1);
   }
   // Set default output file if not set
   if (opts.output_file.empty()) {
-    opts.output_file = opts.input_files.at(0).substr(0, opts.input_files.size() - 4) + ".root";
+    opts.output_file = opts.input_files.at(0).substr(0, opts.input_files.at(0).size() - 4) + ".root";
   }
   // Set default tree name if not set
   if (opts.legacy) {
@@ -162,7 +164,6 @@ void parse_args(int argc, char* argv[], ldf2root::CmdOptions& opts) {
   } else {
     opts.outfile_stem = opts.output_file;
   }
-  opts.build_window *= 1e3; // Convert build window from microseconds to nanoseconds
 }
 
 bool ReadConfigFile(ldf2root::CmdOptions opts) {
@@ -242,7 +243,7 @@ int main(int argc, char* argv[]) {
   dataparser.reset(new DataParser(DataParser::DataFileType::LDF_PIXIE, logname, opts));
 
     // Create output ROOT file and tree
-  TFile* fout = TFile::Open(opts.output_file.c_str(), "RECREATE");
+  TFile* fout = TFile::Open(opts.output_file.c_str(), "RECREATE","",ROOT::RCompressionSetting::EDefaults::kUseAnalysis);
   if (!fout || fout->IsZombie()) {
     std::cerr << "Failed to create output ROOT file: " << opts.output_file << std::endl;
     return 1;
@@ -250,6 +251,7 @@ int main(int argc, char* argv[]) {
   TTree* tout = new TTree(opts.tree_name.c_str(), "DDAS Unpacked Data");
 
   // Prepare DDASHit vector and branch
+  auto rawHits = std::make_unique<std::vector<std::unique_ptr<DDASRootHit>>>();
   DDASRootEvent dEvent;
   TBranch* hitBranch = nullptr;
   if (opts.legacy) {
@@ -261,15 +263,14 @@ int main(int argc, char* argv[]) {
   }
 
   // Main processing step
-  auto rawHits = std::make_unique<std::vector<DDASRootHit>>();
   try {
     // Step 1: specify the input files to the DataParser
     dataparser->SetInputFiles(opts.input_files);
     // Step 2: parse the entire LDF file into DDASRootHit objects + store them in rawHits in time order
-    dataparser->Parse(rawHits.get());
+    dataparser->Parse(rawHits);
     fout->cd();
     // Step 3: Repack the DDASRootHit objects into DDASRootEvent objects and write them to the output ROOT file.
-    EventBuild(rawHits.get(), dEvent, opts, hitBranch,logname);
+    EventBuild(rawHits, dEvent, opts, hitBranch,logname);
     tout->Write("",TObject::kOverwrite);
     fout->Close();
   } catch(std::runtime_error const& e) {
@@ -288,37 +289,39 @@ int main(int argc, char* argv[]) {
   return 0;
 }
 
-void EventBuild(std::vector<DDASRootHit>* hitList, DDASRootEvent& dEvent, ldf2root::CmdOptions opts, TBranch* hitBranch, const std::string& logname) {
+void EventBuild(std::unique_ptr<std::vector<std::unique_ptr<DDASRootHit>>>& hitList, DDASRootEvent& dEvent,const ldf2root::CmdOptions opts, TBranch* hitBranch, const std::string& logname) {
   // Create a DDASRootEvent object to hold the unpacked data
   std::chrono::time_point<std::chrono::high_resolution_clock> start_time = std::chrono::high_resolution_clock::now();
   auto console = spdlog::get(logname)->clone("EventBuilder");
   Double_t lastTime = 0.0;
-  dEvent.Clear();
+  std::vector<std::unique_ptr<DDASRootHit>>::iterator it = hitList.get()->begin();
   // Loop through each hit in the hitList
   switch(opts.build_window_type) {
     case (ldf2root::WindowType::FLAT):
       console->info("Building events with flat window type.");
       // For flat window, we can just fill the TTree with all hits
-      for (auto& hit : *hitList) {
-        dEvent.AddChannelData(&hit);
+      for(; it != hitList->end(); ++it) {
+        dEvent.AddChannelData(std::move(*it));
       }
-      hitBranch->Fill();
+        hitBranch->Fill();
       break;
     
     case (ldf2root::WindowType::ROLLING):
       // For rolling window, we need to keep track of the last event time
       lastTime = 0.0;
       console->info("Building events with rolling window type and build window of {} nanoseconds.", opts.build_window);
-      for (auto& hit : *hitList) {
-        if (std::abs(hit.getTime() - lastTime) < opts.build_window) {
-          dEvent.AddChannelData(&hit);
-          lastTime = hit.getTime();
+      for(; it != hitList->end(); ++it) {  
+        // Access m_time from the base class ddasfmt::DDASHit
+        auto currentHit = std::move(*it);
+        if (std::fabs(currentHit->getTime() - lastTime) < opts.build_window) {
+          dEvent.AddChannelData(std::move(currentHit));
+          lastTime = currentHit->getTime();
         } else {
           // Fill the TTree with the current event
           hitBranch->Fill();
-          dEvent.Clear();
-          dEvent.AddChannelData(&hit);
-          lastTime = hit.getTime();
+          dEvent.Reset();
+          dEvent.AddChannelData(std::move(currentHit));
+          lastTime = currentHit->getTime();
         }
       }
       break;
@@ -327,15 +330,17 @@ void EventBuild(std::vector<DDASRootHit>* hitList, DDASRootEvent& dEvent, ldf2ro
       // For fixed window, we need to keep track of the last event time
       console->info("Building events with fixed window type and build window of {} nanoseconds.", opts.build_window);
       lastTime = 0.0;
-      for ( auto& hit : *hitList) {
-        if (std::abs(hit.getTime() - lastTime) < opts.build_window) {
-          dEvent.AddChannelData(&hit);
+      for(; it != hitList->end(); ++it) {  
+        // Access m_time from the base class ddasfmt::DDASHit
+        auto currentHit = std::move(*it);
+        if (std::fabs(currentHit->getTime() - lastTime) < opts.build_window) {
+          dEvent.AddChannelData(std::move(currentHit));
         } else {
           // Fill the TTree with the current event
           hitBranch->Fill();
-          dEvent.Clear();
-          dEvent.AddChannelData(&hit);
-          lastTime = hit.getTime();
+          dEvent.Reset();
+          dEvent.AddChannelData(std::move(currentHit));
+          lastTime = currentHit->getTime();
         }
       }
       break;

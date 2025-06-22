@@ -79,6 +79,6 @@ void DataParser::SetInputFiles(std::vector<std::string>& filelist){
 	this->DataTranslator->FinalizeFiles();
 }
 
-Translator::TRANSLATORSTATE DataParser::Parse(std::vector<DDASRootHit>* RawEvents){
+Translator::TRANSLATORSTATE DataParser::Parse(std::unique_ptr<std::vector<std::unique_ptr<DDASRootHit>>>& RawEvents){
 	return this->DataTranslator->Parse(RawEvents);
 }

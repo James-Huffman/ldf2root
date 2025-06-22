@@ -11,7 +11,7 @@ proc ModulesHelp { } {
 }
 module-whatis "ldf2root converts files for nuclear physics data"
 
-set topdir @CMAKE_INSTALL_PREFIX@
+set topdir /mnt/analysis/e21069/JH/ldf2root/install
 
 setenv LDF2ROOTSYS $topdir
 prepend-path PATH $topdir/bin

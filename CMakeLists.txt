@@ -161,50 +161,50 @@ set(_LOG_OPTIONS
 	LOG_OUTPUT_ON_FAILURE TRUE
 )
 
-option(USE_SYSTEM_FMT "Use the system fmt library, if not then we will download and use that one" OFF)
-if( USE_SYSTEM_FMT )
+# option(USE_SYSTEM_FMT "Use the system fmt library, if not then we will download and use that one" OFF)
+# if( USE_SYSTEM_FMT )
 	find_package(fmt REQUIRED)
 	set(_FMT_NAME fmt)
-else()
-	set(FMT_EXTERNAL_INSTALL_LOCATION ${CMAKE_INSTALL_PREFIX}/external)
-	set(FMT_VERSION 8.1.1 CACHE STRING "Version of fmt you want to get from git" )
-	mark_as_advanced(FMT_VERSION)
-	set(_FMT_NAME fmtProject)
-	ExternalProject_Add(fmtProject
-		GIT_REPOSITORY https://github.com/fmtlib/fmt
-		GIT_TAG ${FMT_VERSION}
-		CMAKE_ARGS -DCMAKE_INSTALL_PREFIX=${FMT_EXTERNAL_INSTALL_LOCATION} -DCMAKE_VERBOSE_MAKEFILE=OFF -DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE} -DCMAKE_CXX_FLAGS=${CMAKE_CXX_FLAGS}
-		BUILD_COMMAND make -s -j 10
-		INSTALL_COMMAND make -s install
-		${_LOG_OPTIONS}
-	)
-	include_directories(${FMT_EXTERNAL_INSTALL_LOCATION}/include)
-	link_directories(${FMT_EXTERNAL_INSTALL_LOCATION}/lib)
-	list(APPEND EXTERNAL_DEPS fmtProject)
-	list(APPEND EXTERNAL_LOG_DEPS fmtProject)
-endif()
+# else()
+# 	set(FMT_EXTERNAL_INSTALL_LOCATION ${CMAKE_INSTALL_PREFIX}/external)
+# 	set(FMT_VERSION 8.1.1 CACHE STRING "Version of fmt you want to get from git" )
+# 	mark_as_advanced(FMT_VERSION)
+# 	set(_FMT_NAME fmtProject)
+# 	ExternalProject_Add(fmtProject
+# 		GIT_REPOSITORY https://github.com/fmtlib/fmt
+# 		GIT_TAG ${FMT_VERSION}
+# 		CMAKE_ARGS -DCMAKE_INSTALL_PREFIX=${FMT_EXTERNAL_INSTALL_LOCATION} -DCMAKE_VERBOSE_MAKEFILE=OFF -DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE} -DCMAKE_CXX_FLAGS=${CMAKE_CXX_FLAGS}
+# 		BUILD_COMMAND make -s -j 10
+# 		INSTALL_COMMAND make -s install
+# 		${_LOG_OPTIONS}
+# 	)
+# 	include_directories(${FMT_EXTERNAL_INSTALL_LOCATION}/include)
+# 	link_directories(${FMT_EXTERNAL_INSTALL_LOCATION}/lib)
+# 	list(APPEND EXTERNAL_DEPS fmtProject)
+# 	list(APPEND EXTERNAL_LOG_DEPS fmtProject)
+# endif()
 
-option(USE_SYSTEM_SPDLOG "Use either spdlog or grab it from github" OFF)
-if( USE_SYSTEM_SPDLOG )
-	find_package(spdlog REQUIRED)
-else()
-	set(SPDLOG_EXTERNAL_INSTALL_LOCATION ${CMAKE_INSTALL_PREFIX}/external)
-	set(SPDLOG_VERSION v1.9.2 CACHE STRING "Version of spdlog you want to get from git" )
-	mark_as_advanced(SPDLOG_VERSION)
-	ExternalProject_Add(spdlogProject
-		GIT_REPOSITORY https://github.com/gabime/spdlog
-		GIT_TAG ${SPDLOG_VERSION}
-		CMAKE_ARGS -DCMAKE_INSTALL_PREFIX=${SPDLOG_EXTERNAL_INSTALL_LOCATION} -DCMAKE_VERBOSE_MAKEFILE=OFF -DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE} -DCMAKE_CXX_FLAGS=${CMAKE_CXX_FLAGS}
-		BUILD_COMMAND make -s -j 10
-		INSTALL_COMMAND make -s install
-		${_LOG_OPTIONS}
-		DEPENDS ${_FMT_NAME}
-	)
-	include_directories(${SPDLOG_EXTERNAL_INSTALL_LOCATION}/include)
-	link_directories(${SPDLOG_EXTERNAL_INSTALL_LOCATION}/lib)
-	list(APPEND EXTERNAL_DEPS spdlogProject)
-	list(APPEND EXTERNAL_LOG_DEPS spdlogProject)
-endif()
+# option(USE_SYSTEM_SPDLOG "Use either spdlog or grab it from github" OFF)
+# if( USE_SYSTEM_SPDLOG )
+    find_package(spdlog REQUIRED)
+# else()
+# 	set(SPDLOG_EXTERNAL_INSTALL_LOCATION ${CMAKE_INSTALL_PREFIX}/external)
+# 	set(SPDLOG_VERSION v1.9.2 CACHE STRING "Version of spdlog you want to get from git" )
+# 	mark_as_advanced(SPDLOG_VERSION)
+# 	ExternalProject_Add(spdlogProject
+# 		GIT_REPOSITORY https://github.com/gabime/spdlog
+# 		GIT_TAG ${SPDLOG_VERSION}
+# 		CMAKE_ARGS -DCMAKE_INSTALL_PREFIX=${SPDLOG_EXTERNAL_INSTALL_LOCATION} -DCMAKE_VERBOSE_MAKEFILE=OFF -DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE} -DCMAKE_CXX_FLAGS=${CMAKE_CXX_FLAGS}
+# 		BUILD_COMMAND make -s -j 10
+# 		INSTALL_COMMAND make -s install
+# 		${_LOG_OPTIONS}
+# 		DEPENDS ${_FMT_NAME}
+# 	)
+# 	include_directories(${SPDLOG_EXTERNAL_INSTALL_LOCATION}/include)
+# 	link_directories(${SPDLOG_EXTERNAL_INSTALL_LOCATION}/lib)
+# 	list(APPEND EXTERNAL_DEPS spdlogProject)
+# 	list(APPEND EXTERNAL_LOG_DEPS spdlogProject)
+# endif()
 
 
 add_subdirectory(core)
@@ -212,18 +212,18 @@ add_subdirectory(core)
 add_executable(ldf2root ldf2root.cpp)
 
 # Link libraries
-if( EXTERNAL_DEPS )
-	add_dependencies(ldf2root ${EXTERNAL_DEPS})
-endif()
+# if( EXTERNAL_DEPS )
+# 	add_dependencies(ldf2root ${EXTERNAL_DEPS})
+# endif()
 target_link_libraries(ldf2root PRIVATE ${ROOT_LIBRARIES} DDASRoot DDASRootLegacy ldf2rootCore ROOT::RIO)
 target_include_directories(ldf2root PRIVATE ${CMAKE_CURRENT_BINARY_DIR})
 
-if( USE_SYSTEM_FMT )
+# if( USE_SYSTEM_FMT )
 	target_link_libraries(ldf2root PRIVATE fmt::fmt)
-endif()
-if( USE_SYSTEM_SPDLOG )
+# endif()
+# if( USE_SYSTEM_SPDLOG )
 	target_link_libraries(ldf2root PRIVATE spdlog::spdlog_header_only)
-endif()
+# endif()
 
 # Install target (optional)
 install(TARGETS ldf2root RUNTIME DESTINATION bin)

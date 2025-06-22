@@ -12,20 +12,18 @@ Processing from this point will be done by the DDASHitUnpacker, which will take 
 #define __LDF_PIXIE_TRANSLATOR_H__
 
 #include <string>
-#include <map>
+#include <memory>
 
 #include "Translator.h"
 
 #include "InputParser.h"
 #include "DDASRootHit.h"
-#include "DDASRootEvent.h"
-#include "DDASHitUnpacker.h"
 
 class LDFPixieTranslator : public Translator{
 	public:
 		LDFPixieTranslator(const std::string&,const std::string&, const ldf2root::CmdOptions& cmdopts);
 		~LDFPixieTranslator();
-		Translator::TRANSLATORSTATE Parse(std::vector<DDASRootHit>* RawEvents);
+		Translator::TRANSLATORSTATE Parse(std::unique_ptr<std::vector<std::unique_ptr<DDASRootHit>>>& RawEvents);
 
 		enum HRIBF_TYPES{
 			HEAD = 1145128264,
@@ -98,7 +96,7 @@ class LDFPixieTranslator : public Translator{
 		int ReadNextBuffer(bool force = false);
 		int ParseDataBuffer(unsigned int&,bool&,bool&);
 
-		int UnpackData(unsigned int&,bool&,bool&,std::vector<bool>&, std::vector<DDASRootHit>* );
+		int UnpackData(unsigned int&,bool&,bool&,std::vector<bool>& );
 		int CountBuffersWithData() const;
 
 
@@ -123,12 +121,9 @@ class LDFPixieTranslator : public Translator{
 
 
 		// Added for unpacking DDASHit objects
-		DDASRootEvent CurrEvent;
-		DDASRootHit CurrRootHit;
-		ddasfmt::DDASHitUnpacker RootUnpacker;
 		ldf2root::CmdOptions CmdOpts;
 
-		void AddDDASWords(const uint32_t&buffpos, uint32_t&eventLength, uint32_t&spillLength, std::vector<bool>& entriesread);
+		void AddDDASWords(const uint32_t&buffpos, uint32_t&eventLength, std::vector<bool>& entriesread);
 
 		
 };

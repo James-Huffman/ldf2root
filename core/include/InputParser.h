@@ -22,7 +22,7 @@ struct CmdOptions {
   std::string config_file;
   std::string tree_name;
   Double_t build_window = 3000; // Default build window in nanoseconds
-  WindowType build_window_type = WindowType::FIXED; // Default to fixed window
+  WindowType build_window_type = WindowType::FLAT; // Default to fixed window
   Bool_t log_file = false;
   Bool_t silent = false;
   Bool_t legacy = false;

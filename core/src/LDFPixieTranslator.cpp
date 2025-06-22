@@ -1,8 +1,11 @@
+#include <cstddef>
 #include <cstdint>
 #include <cstdlib>
 #include <ios>
+#include <iterator>
 #include <stdexcept>
 #include <algorithm>
+#include <type_traits>
 
 // #include <boost/sort/pdqsort/pdqsort.hpp>
 // #include <boost/sort/spinsort/spinsort.hpp>
@@ -13,8 +16,6 @@
 #include "DDASHitUnpacker.h"
 
 // #include "boost/move/iterator.hpp"
-
-
 
 LDFPixieTranslator::LDFPixieTranslator(const std::string& logname,const std::string& translatorname, const ldf2root::CmdOptions& cmdopts) : Translator(logname,translatorname){
 	this->PrevTimeStamp = 0;
@@ -73,7 +74,7 @@ LDFPixieTranslator::~LDFPixieTranslator(){
 	}
 }
 
-Translator::TRANSLATORSTATE LDFPixieTranslator::Parse(std::vector<DDASRootHit>* RawEvents){
+Translator::TRANSLATORSTATE LDFPixieTranslator::Parse(std::unique_ptr<std::vector<std::unique_ptr<DDASRootHit>>>& RawEvents){
 	if( this->InputFiles.empty() ){
 		this->console->error("No input files to parse");
 		return Translator::TRANSLATORSTATE::COMPLETE;
@@ -119,35 +120,35 @@ Translator::TRANSLATORSTATE LDFPixieTranslator::Parse(std::vector<DDASRootHit>* 
 		}
 		// Read in complete file and had no spill errors
 		if( full_spill and  retval != 2){
-			this->UnpackData(nBytes,full_spill,bad_spill,entriesread, RawEvents);
+			this->UnpackData(nBytes,full_spill,bad_spill,entriesread);
 		}
 	}
 	// Sort the data within each module 
 	for( size_t ii = 0; ii < entriesread.size(); ++ii ){
 		if( entriesread[ii] ){
-			std::sort(this->CustomLeftovers[ii].begin(),this->CustomLeftovers[ii].end());
+			std::sort(this->CustomLeftovers[ii].begin(),this->CustomLeftovers[ii].end(),
+				[](const std::unique_ptr<DDASRootHit>& a, const std::unique_ptr<DDASRootHit>& b) {return *a < *b;}
+			);
 		}
 	}
 	// Add events from each module spill to the RawEvents vector
 	for( size_t ii = 0; ii < this->CustomLeftovers.size(); ++ii ){
-		auto evt = this->CustomLeftovers[ii].front();
-		auto spill = LeftoverSpillIDs[ii].front();
-		while(true){
-			if( this->CustomLeftovers[ii].empty() ){
-				break;
-			}
-			RawEvents->push_back(evt);
-			CustomLeftovers[ii].pop_front();
-			evt = this->CustomLeftovers[ii].front();
 
-			this->EvtSpillCounter[spill%this->NUMCONCURRENTSPILLS] -= 1;
-			LeftoverSpillIDs[ii].pop_front();
-			spill = LeftoverSpillIDs[ii].front();
+		while( !this->CustomLeftovers[ii].empty() && !this->LeftoverSpillIDs[ii].empty() ){
+			auto spill = this->LeftoverSpillIDs[ii].front();
+
+			RawEvents->push_back(std::move(this->CustomLeftovers[ii].front()));
+			this->CustomLeftovers[ii].pop_front();
+			this->LeftoverSpillIDs[ii].pop_front();
+
+			this->EvtSpillCounter[spill % this->NUMCONCURRENTSPILLS] -= 1;
 		}
 	}
 	// Re-sort the RawEvents vector
 	if( RawEvents->size() > 0 ){
-		std::sort(RawEvents->begin(),RawEvents->end());
+		std::sort(RawEvents->begin(),RawEvents->end(),
+			[](const std::unique_ptr<DDASRootHit>& a, const std::unique_ptr<DDASRootHit>& b) {return *a < *b;}
+		);
 	}
 	return Translator::TRANSLATORSTATE::COMPLETE;
 }
@@ -199,31 +200,24 @@ int LDFPixieTranslator::ParseHeadBuffer(){
 		this->CurrentFile.seekg(-8,this->CurrentFile.cur);
 		return -1;
 	}	
-	std::streamsize headOffset = 0;
 	// Get facility name, format name, type name, date, run title, and run number, and add null terminaltion to strings.
 	// Get facility name (8 characters)
 	this->CurrentFile.read(reinterpret_cast<char*>(&(this->CurrHeadBuff.facility)),8);
 	this->CurrHeadBuff.facility[8] = '\0';
-	headOffset += this->CurrentFile.gcount();
 	// Get format name (8 characters)
 	this->CurrentFile.read(reinterpret_cast<char*>(&(this->CurrHeadBuff.format)),8);
 	this->CurrHeadBuff.format[8] = '\0';
-	headOffset += this->CurrentFile.gcount();
 	// Get type name (16 characters)
 	this->CurrentFile.read(reinterpret_cast<char*>(&(this->CurrHeadBuff.type)),16);
 	this->CurrHeadBuff.type[16] = '\0';
-	headOffset += this->CurrentFile.gcount();
  // Get date (16 characters)
 	this->CurrentFile.read(reinterpret_cast<char*>(&(this->CurrHeadBuff.date)),16);
 	this->CurrHeadBuff.date[16] = '\0';
-	headOffset += this->CurrentFile.gcount();
   // Get run title (80 characters)
 	this->CurrentFile.read(reinterpret_cast<char*>(&(this->CurrHeadBuff.run_title)),80);
 	this->CurrHeadBuff.run_title[80] = '\0';
-	headOffset += this->CurrentFile.gcount();
 	// Get run number (4 bytes)
 	this->CurrentFile.read(reinterpret_cast<char*>(&(this->CurrHeadBuff.run_num)),sizeof(uint32_t));
-	headOffset += this->CurrentFile.gcount();
 	// Seek to the next buffer. This is the first data buffer.
 	++this->buffersRead;
 	this->CurrentFile.seekg(this->CurrDirBuff.fileBufferSize*sizeof(uint32_t)*buffersRead, this->CurrentFile.beg);
@@ -388,23 +382,30 @@ int LDFPixieTranslator::ReadNextBuffer(bool force){
 }
 
 // UnpackData for the current spill
-int LDFPixieTranslator::UnpackData(uint32_t& nBytes,bool& full_spill,bool& bad_spill,std::vector<bool>& entriesread, std::vector<DDASRootHit>* RawEvents){
+int LDFPixieTranslator::UnpackData(uint32_t& nBytes,bool& full_spill,bool& bad_spill,std::vector<bool>& entriesread){
+
+	this->console->info("Unpacking Data for Spill ID : {}",this->CurrSpillID);
+	this->console->info("nBytes : {}",nBytes);
 	uint32_t nWords = nBytes/4;
 	uint32_t nWords_read = 0;
 	uint32_t spillLength = 0xFFFFFFFF;
 	uint32_t vsn = 0xFFFFFFFF;
-	DDASRootHit currentHit;
+	std::unique_ptr<DDASRootHit> currentHit;
 	ddasfmt::DDASHitUnpacker unpacker;
 	uint32_t eventLength = 0;
 	// auto currsize = this->Leftovers.size();
-	time_t theTime = 0;
 	this->NTotalWords += nWords;
-	while( nWords_read <= nWords ){
+	while( nWords_read+1 < this->databuffer.size() ){
 		while( this->databuffer[nWords_read] == 0xFFFFFFFF ){
 			++nWords_read;
 		}
+		if(nWords_read+1>=this->databuffer.size()){
+			this->console->critical("Not enough words in buffer to read spill length and vsn");
+			break;
+		}
 		spillLength = this->databuffer[nWords_read];
 		vsn = this->databuffer[nWords_read + 1];
+
 		// this->console->info("spillLength : {} vsn : {}",spillLength,vsn);
 
 		if( spillLength == 6 ){
@@ -419,42 +420,63 @@ int LDFPixieTranslator::UnpackData(uint32_t& nBytes,bool& full_spill,bool& bad_s
 				continue;
 			}else{
 				//good module readout
-				uint32_t buffpos = nWords_read+2; 
-				while( buffpos < (nWords_read + spillLength) ){
-
+				uint32_t buffpos = nWords_read+2;
+				uint32_t spillEnd = nWords_read + spillLength;
+				while( buffpos < spillEnd ){
 					// UNPACKING DATA HERE!!!
+					// Check that we have enough data to read the event header
+					if (buffpos >= this->databuffer.size()) {
+						this->console->critical("buffpos {} out of databuffer bounds {}", buffpos, this->databuffer.size());
+						throw std::runtime_error("buffpos out of bounds in UnpackData");
+					}
 					// Use the first word to get the module number, crate number
-					AddDDASWords(buffpos, eventLength, spillLength, entriesread);
-
+					AddDDASWords(buffpos, eventLength, entriesread);
+					spillEnd += 2;
+					this->console->info("buffpos : {} spillEnd : {} databuffer size : {}", buffpos, spillEnd, this->databuffer.size()/sizeof(uint32_t));
+					// Bounds check before using eventLength
+					if (eventLength == 0 || buffpos + eventLength > this->databuffer.size()) {
+						this->console->critical("Invalid eventLength {} at buffpos {} (databuffer size: {})", eventLength, buffpos, this->databuffer.size());
+						throw std::runtime_error("eventLength out of bounds in UnpackData");
+					}
 					firstWords = &(this->databuffer[buffpos]);
 
-					currentHit.Reset();
-					const uint32_t* finish = unpacker.unpack(firstWords, firstWords+eventLength, currentHit);
+					// Allocate a new DDASRootHit object and unpack the data
+					currentHit.reset(new DDASRootHit());
+
+					const uint32_t* finish = unpacker.unpack(firstWords, firstWords+eventLength, *currentHit);
 					if (finish-firstWords != eventLength) {
 						this->console->error("Unpacked event length {} does not match expected length {}", finish-firstWords, eventLength);
 						throw std::runtime_error("Unpacked event length does not match expected length");
 					}
+					
 					buffpos += eventLength;
-					CustomLeftovers[currentHit.getSlotID()].push_back(currentHit);
-					this->LeftoverSpillIDs[currentHit.getSlotID()].push_back(this->CurrSpillID);
 
-					++this->EvtSpillCounter[this->CurrSpillID%this->NUMCONCURRENTSPILLS];
+					if(currentHit){
+						if(currentHit->getSlotID() < CustomLeftovers.size()){
+							size_t slotID = static_cast<size_t>(currentHit->getSlotID());
+							this->CustomLeftovers[slotID].push_back(std::move(currentHit));
+
+							this->LeftoverSpillIDs[slotID].push_back(this->CurrSpillID);
+							++this->EvtSpillCounter[(this->CurrSpillID) % (this->NUMCONCURRENTSPILLS)];
+						} else {
+							this->console->critical("Invalid Slot ID : {} at spill {}",currentHit->getSlotID(),this->CurrSpillID);
+							// throw std::runtime_error("Invalid Slot ID in UnpackData");}
+						}
+					} else{
+							this->console->critical("currentHit is null at spill {}",this->CurrSpillID);
+							// throw std::runtime_error("currentHit is null in UnpackData");
+					}
 				}
+				this->console->info("Finished unpacking spill ID : {} with {} words read", this->CurrSpillID, spillLength);
 				nWords_read += spillLength;
 			}
-		}else if( vsn == 1000 ){
-			//this is for superheavy
-			memcpy(&theTime,&(this->databuffer[nWords_read + 2]),sizeof(time_t));
-			this->console->info("ctime : {}",ctime(&theTime));
-			nWords_read += spillLength;
-			continue;
-			// End of spill
+
 		}else if( vsn == 9999 ){
 			//end of readout
 			//auto finalsize = this->Leftovers.size();
 			//this->EvtSpillCounter[this->CurrSpillID%this->NUMCONCURRENTSPILLS] = (finalsize - currsize);
 			//this->console->info("evts added {}",(finalsize-currsize));
-			//this->console->info("spill : {} words : {} Total words : {}",this->CurrSpillID,nWords,this->NTotalWords);
+			this->console->info("spill : {} words : {} Total words : {}",this->CurrSpillID,nWords,this->NTotalWords);
 			++(this->CurrSpillID);
 			this->databuffer.clear();
 			break;
@@ -495,7 +517,7 @@ int LDFPixieTranslator::CountBuffersWithData() const{
 	//}
 }
 
-void LDFPixieTranslator::AddDDASWords(const uint32_t&buffpos, uint32_t&eventLength, uint32_t&spillLength, std::vector<bool>& entriesread){
+void LDFPixieTranslator::AddDDASWords(const uint32_t&buffpos, uint32_t&eventLength, std::vector<bool>& entriesread){
 	const uint32_t firstWord = this->databuffer[buffpos];
 	
 	eventLength = ((firstWord & 0x3FFE0000)>>17) + 2;
@@ -510,6 +532,4 @@ void LDFPixieTranslator::AddDDASWords(const uint32_t&buffpos, uint32_t&eventLeng
 
 	this->databuffer.insert(this->databuffer.begin() + buffpos, DDASWord1);
 	this->databuffer.insert(this->databuffer.begin() + buffpos + 1, DDASWord2);
-	spillLength += 2;
-
 }

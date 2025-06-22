@@ -40,7 +40,7 @@ class DataParser{
 		~DataParser() = default;
 		void SetInputFiles(std::vector<std::string>&);
 		
-		Translator::TRANSLATORSTATE Parse(std::vector<DDASRootHit>* RawEvents);
+		Translator::TRANSLATORSTATE Parse(std::unique_ptr<std::vector<std::unique_ptr<DDASRootHit>>>& RawEvents);
 
 		// void SetChannelMap(const std::shared_ptr<ChannelMap>&);
 		// void SetCorrelator(const std::shared_ptr<Correlator>&);
