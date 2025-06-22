@@ -1,6 +1,19 @@
 # ldf2root
 
-`ldf2root` is a tool for converting LDF (List Data Format) files into ROOT files for further analysis in high-energy or nuclear physics experiments.
+`ldf2root` is a tool for converting LDF files used by the ORNL-HRIBF nuclear physics group's Poll data acquisition system
+
+## Credit
+
+GenScan by @truland and @tking53 here: https://github.com/tking53/genScan
+- This project relies on the LDFPixieTranslator for parsing the UTK PAASS Pixie16 LDF file format.
+- It also uses the Translator and DataParser classes for managing and reading in files.
+
+FRIBDAQ/DDASFormat by @aschester and @rfoxkendo: https://github.com/FRIBDAQ/DDASFormat
+- This project uses the DDASHitUnpacker to convert raw data streams to DDASHit objects
+- Also uses the DDASRootHit and DDASRootEvent classes from NSCLDAQ/main/ddas
+/ddasdumper for saving the objects to .root files for later analysis using the ROOT Data Analysis software here: https://github.com/root-project/root
+
+Both of these projects are the result of decades of work and experience on the data acquisition systems in nuclear physics using the Pixie16 modules by XIA, LLC.
 
 ## Features
 
@@ -11,15 +24,31 @@
 ## Requirements
 
 - C++ compiler (e.g., g++)
-- [ROOT](https://root.cern/) framework installed
+- [ROOT](https://root.cern/) installed
+- spdlog https://github.com/gabime/spdlog
 
 ## Installation
 
-```bash
-git clone https://github.com/yourusername/ldf2root.git
-cd ldf2root
-make
-```
+1. Clone the project
+    ```bash
+    git clone https://github.com/yourusername/ldf2root.git
+    cd ldf2root
+    ```
+2. Create a build directory:
+   ```bash
+   mkdir build
+   cd build
+   ```
+3. Run CMake:
+   ```bash
+   cmake ..
+   ```
+4. Compile the project:
+   ```bash
+   make
+   ```
+
+Make sure to adjust any paths or settings according to your specific project structure and environment.
 
 ## Usage
 To see all available options, run:

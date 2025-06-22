@@ -22,7 +22,6 @@
  */ 
 
 #include "DDASRootEvent.h"
-
 #include "DDASRootHit.h"
 
 DDASRootEvent::DDASRootEvent() : TObject(), m_data() {}

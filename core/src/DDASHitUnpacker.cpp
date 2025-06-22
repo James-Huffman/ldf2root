@@ -21,13 +21,12 @@
  * NSCLDAQ/FRIBDAQ.
  */
 
-#include "DDASHitUnpacker.h"
-
 #include <sstream>
 #include <iomanip>
 #include <iostream>
 #include <stdexcept>
 
+#include "DDASHitUnpacker.h"
 #include "DDASBitMasks.h"
 
 using namespace ddasfmt;
@@ -372,6 +371,11 @@ ddasfmt::DDASHitUnpacker::parseAndComputeCFD(uint32_t ModMSPS, uint32_t data)
 	timeCFD       = ((data & BIT_28_TO_16_MASK) >> 16);
 	correction    = (timeCFD/8192.0 + cfdTrigSource - 1)*2.0;
 	cfdFailBit    = (cfdTrigSource == 7) ? 1 : 0;
+    }else{
+        correction = 0.0;
+        cfdTrigSource = 0;
+        cfdFailBit = 0;
+        timeCFD = 0;
     }
 
     return std::make_tuple(correction, timeCFD, cfdTrigSource, cfdFailBit);
@@ -411,6 +415,11 @@ ddasfmt::DDASHitUnpacker::parseAndComputeCFD(DDASHit& hit, uint32_t data)
 	timeCFD       = ((data & BIT_28_TO_16_MASK) >> 16);
 	correction    = (timeCFD/8192.0 + cfdTrigSource - 1)*2.0;
 	cfdFailBit    = (cfdTrigSource == 7) ? 1 : 0;
+    } else {
+        correction = 0.0;
+        cfdTrigSource = 0;
+        cfdFailBit = 0;
+        timeCFD = 0;
     }
 
     hit.setCFDFailBit(cfdFailBit);

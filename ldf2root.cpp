@@ -29,7 +29,7 @@
 
 // GenScan Classes
 
-#include "./src/DataParser.h"
+#include "DataParser.h"
 
 #include <spdlog/common.h>
 #include <spdlog/spdlog.h>
@@ -39,9 +39,9 @@
 #include <spdlog/sinks/stdout_color_sinks.h>
 
 // Include additional user headers
-#include "./src/InputParser.h"
-#include "./src/DDASRootHit.h"
-#include "./src/DDASRootEvent.h"
+#include "InputParser.h"
+#include "DDASRootHit.h"
+#include "DDASRootEvent.h"
 
 void EventBuild(std::vector<DDASRootHit>* hitList, DDASRootEvent& rawEvent, ldf2root::CmdOptions opts, TBranch* hitBranch, const std::string& logname);
 
@@ -93,11 +93,11 @@ void parse_args(int argc, char* argv[], ldf2root::CmdOptions& opts) {
     } else if (arg == "--help" || arg == "-h") {
       PrintUsageString();
       exit(0);
-    } else if (arg == "--input-file" && i + 1 < argc) {
+    } else if ((arg == "--input"|| arg=="-i" )&& i + 1 < argc) {
       opts.input_files.push_back(argv[++i]);
-    } else if (arg == "--output-file" && i + 1 < argc) {
+    } else if ((arg == "--output"|| arg=="-o") && i + 1 < argc) {
       opts.output_file = argv[++i];
-    } else if (arg == "--config-file" && i + 1 < argc) {
+    } else if ((arg == "--config"|| arg=="-c") && i + 1 < argc) {
       opts.config_file = argv[++i];
     } else if (arg == "--tree-name" && i + 1 < argc) {
       opts.tree_name = argv[++i];
@@ -176,9 +176,11 @@ bool ReadConfigFile(ldf2root::CmdOptions opts) {
     try{
       std::istringstream iss(line);
       if (line.empty() || line[0] == '#') continue; // Skip empty lines and comments
-      unsigned int mod, msps, res;
+
       std::pair<unsigned int, unsigned int> crate_mod;
+      unsigned int msps, res;
       std::string hw;
+
       if (!(iss >> crate_mod.first >> crate_mod.second >> msps >> res >> hw)) continue; // skip malformed lines
       opts.mod_params_map[crate_mod] = {msps, res, static_cast<unsigned int>(std::stol(hw,nullptr,16))}; // Store MSPS and resolution, third element is reserved for future use);
     } catch (const std::exception& e) {

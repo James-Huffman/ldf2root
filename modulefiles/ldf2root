@@ -1,0 +1,25 @@
+#%Module1.0
+##
+## modulefiles/ldf2root
+##
+## @author J. Huffman
+
+proc ModulesHelp { } {
+    global version modroot
+
+    puts stderr "ldf2root - ldf2root converts files for nuclear physics data"
+}
+module-whatis "ldf2root converts files for nuclear physics data"
+
+set topdir @CMAKE_INSTALL_PREFIX@
+
+setenv LDF2ROOTSYS $topdir
+prepend-path PATH $topdir/bin
+prepend-path LD_LIBRARY_PATH $topdir/lib
+prepend-path LD_LIBRARY_PATH $topdir/external/lib
+prepend-path DYLD_LIBRARY_PATH	$topdir/lib
+prepend-path DYLD_LIBRARY_PATH	$topdir/external/lib
+prepend-path CPLUS_INCLUDE_PATH	$topdir/include
+prepend-path CPLUS_INCLUDE_PATH	$topdir/external/include
+prepend-path LIBRARY_PATH	$topdir/lib
+prepend-path LIBRARY_PATH	$topdir/external/lib

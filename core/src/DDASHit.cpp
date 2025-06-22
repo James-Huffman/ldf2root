@@ -21,14 +21,10 @@
  * @brief Implement DDASHit class used to encapsulate DDAS events.
  */
 
-#include "DDASHit.h"
-
 #include <stdlib.h>
-
 #include <stdexcept>
-#include <sstream>
-#include <iomanip>
 
+#include "DDASHit.h"
 #include "DDASBitMasks.h"
 
 using namespace ddasfmt;
@@ -38,12 +34,12 @@ using namespace ddasfmt;
  * All member data are zero-initialized.
  */
 ddasfmt::DDASHit::DDASHit() :
-    m_time(0), m_coarseTime(0), m_externalTimestamp(0), m_energy(0),
-    m_timeHigh(0), m_timeLow(0), m_timeCFD(0), m_finishCode(0),
+    m_time(0), m_coarseTime(0), m_externalTimestamp(0), m_timeHigh(0), 
+    m_timeLow(0), m_timeCFD(0), m_energy(0), m_finishCode(0),
     m_channelLength(0), m_channelHeaderLength(0),
     m_chanID(0), m_slotID(0), m_crateID(0),
     m_cfdTrigSourceBit(0), m_cfdFailBit(0), m_traceLength(0),
-    m_modMSPS(0), m_adcResolution(0), m_hdwrRevision(0),
+    m_modMSPS(0), m_hdwrRevision(0), m_adcResolution(0),
     m_adcOverflowUnderflow(false),
     m_energySums(), m_qdcSums(), m_trace()
 {}
@@ -56,12 +52,12 @@ ddasfmt::DDASHit::DDASHit() :
 void
 ddasfmt::DDASHit::Reset() {
     m_time = 0;
-    m_externalTimestamp = 0;
     m_coarseTime = 0;
-    m_energy = 0;
+    m_externalTimestamp = 0;
     m_timeHigh = 0;
     m_timeLow = 0;
     m_timeCFD = 0;
+    m_energy = 0;
     m_finishCode = 0;
     m_channelLength = 0;
     m_channelHeaderLength = 0;
@@ -72,13 +68,13 @@ ddasfmt::DDASHit::Reset() {
     m_cfdFailBit = 0;
     m_traceLength = 0;
     m_modMSPS = 0;      
-    m_adcResolution = 0;
     m_hdwrRevision = 0;
+    m_adcResolution = 0;
     m_adcOverflowUnderflow = false;
     
     m_energySums.clear();
     m_qdcSums.clear();
-    m_trace.clear();    
+    m_trace.clear();
 }
 	
 /** 
