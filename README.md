@@ -34,27 +34,28 @@ Both of these projects are the result of decades of work and experience on the d
     git clone https://github.com/yourusername/ldf2root.git
     cd ldf2root
     ```
-2. Create a build directory:
+2. Create a build directory, configure and compile:
    ```bash
    mkdir build
    cd build
-   ```
-3. Run CMake:
-   ```bash
-   cmake ..
-   ```
-4. Compile the project:
-   ```bash
+   ccmake ..
    make
+   make install
+   ```
+4. Load project modulefile:
+    You will need to load the modulefile located in install/modulefile/ldf2root
+    You can either copy this to $HOME/modulefiles or another location you use modulefiles and run
+   ```bash
+   module use $HOME/modulefiles
+   module load ldf2root
    ```
 
-Make sure to adjust any paths or settings according to your specific project structure and environment.
 
 ## Usage
 To see all available options, run:
 
 ```bash
-./ldf2root --help
+ldf2root --help
 ```
 
 ### Command-line Arguments
@@ -73,11 +74,11 @@ To see all available options, run:
 
 Minimal usage
 ```bash
-./ldf2root -i data.ldf -c settings.conf
+ldf2root -i data.ldf -c settings.conf
 ```
 Custom usage
 ```bash
-./ldf2root -i data.ldf -o custom-out.root --tree-name <tree-name> -c settings.conf
+ldf2root -i data.ldf -o custom-out.root --tree-name <tree-name> -c settings.conf
 ```
 
 ## Contributing
