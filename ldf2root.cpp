@@ -277,7 +277,7 @@ int main(int argc, char* argv[]) {
     } while (CurrState == Translator::TRANSLATORSTATE::PARSING);
     // console->info("Finished parsing {} hits from {} input files.", rawHits->size(), opts.input_files.size());
     // Step 3: Repack the DDASRootHit objects into DDASRootEvent objects and write them to the output ROOT file.
-    tout->Write();
+    tout->Write("",TObject::kOverwrite);
     fout->Close();
   } catch(std::runtime_error const& e) {
     console->error(e.what());

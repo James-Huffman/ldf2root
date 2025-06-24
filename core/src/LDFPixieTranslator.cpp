@@ -122,7 +122,6 @@ Translator::TRANSLATORSTATE LDFPixieTranslator::Parse(std::unique_ptr<std::vecto
 		}
 		// Read in complete file and had no spill errors
 		if( full_spill and  retval != 2){
-			this->console->info("Unpacking spill ID : {}",this->CurrSpillID);
 			this->UnpackData(nBytes,full_spill,bad_spill,entriesread);
 		}
 	}
@@ -160,7 +159,7 @@ Translator::TRANSLATORSTATE LDFPixieTranslator::Parse(std::unique_ptr<std::vecto
 			[](const std::unique_ptr<DDASRootHit>& a, const std::unique_ptr<DDASRootHit>& b) {return *a < *b;}
 		);
 	}
-	if (this->FinishedCurrentFile && this->FinishedReadingFiles) {
+	if (this->FinishedReadingFiles) {
 		return Translator::TRANSLATORSTATE::COMPLETE;
 	}
 	return Translator::TRANSLATORSTATE::PARSING;
