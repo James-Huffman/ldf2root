@@ -44,6 +44,7 @@ bool Translator::AddFile(const std::string& filename){
 
 void Translator::FinalizeFiles(){
 	this->NumTotalFiles = this->InputFiles.size();
+	this->console->info("Finalizing files, total files : {}",this->NumTotalFiles);
 	this->NumFilesRemaining = this->NumTotalFiles;
 	this->CurrentFileIndex = 0;
 	this->FinishedCurrentFile = true;

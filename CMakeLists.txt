@@ -34,6 +34,11 @@ if (CMAKE_COMPILER_IS_GNUCXX)
 	endif ()
 
 	set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -pedantic -fPIC")
+	
+	# Suppress false positive array-bounds warnings in GCC 13+ with fmt library
+	if (${CMAKE_CXX_COMPILER_VERSION} VERSION_GREATER_EQUAL "13.0")
+		set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-array-bounds")
+	endif ()
 endif ()
 
 if (CMAKE_INSTALL_PREFIX_INITIALIZED_TO_DEFAULT)

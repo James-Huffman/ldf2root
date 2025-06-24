@@ -108,29 +108,33 @@ Translator::TRANSLATORSTATE LDFPixieTranslator::Parse(std::unique_ptr<std::vecto
 			}
 		}
 		if( this->FinishedReadingFiles ){
+			// return here instead?
 			break;
 		}
 
 		bool full_spill;
 		bool bad_spill;
 		uint32_t nBytes = 0;
+		// this->console->info("Reading file : {}, SpillID {}",this->InputFiles.at(this->CurrentFileIndex), this->CurrSpillID);
 		int retval = this->ParseDataBuffer(nBytes,full_spill,bad_spill);
 		if( retval == -1 ){
 			throw std::runtime_error("Invalid Data Buffer in File : "+this->InputFiles.at(this->CurrentFileIndex));
 		}
 		// Read in complete file and had no spill errors
 		if( full_spill and  retval != 2){
+			this->console->info("Unpacking spill ID : {}",this->CurrSpillID);
 			this->UnpackData(nBytes,full_spill,bad_spill,entriesread);
 		}
 	}
-	// Sort the data within each module 
-	for( size_t ii = 0; ii < entriesread.size(); ++ii ){
-		if( entriesread[ii] ){
-			std::sort(this->CustomLeftovers[ii].begin(),this->CustomLeftovers[ii].end(),
-				[](const std::unique_ptr<DDASRootHit>& a, const std::unique_ptr<DDASRootHit>& b) {return *a < *b;}
-			);
-		}
-	}
+	this->console->info("Sorting...");
+	// // Sort the data within each module 
+	// for( size_t ii = 0; ii < entriesread.size(); ++ii ){
+	// 	if( entriesread[ii] ){
+	// 		std::sort(this->CustomLeftovers[ii].begin(),this->CustomLeftovers[ii].end(),
+	// 			[](const std::unique_ptr<DDASRootHit>& a, const std::unique_ptr<DDASRootHit>& b) {return *a < *b;}
+	// 		);
+	// 	}
+	// }
 	// Add events from each module spill to the RawEvents vector
 	for( size_t ii = 0; ii < this->CustomLeftovers.size(); ++ii ){
 
@@ -141,8 +145,14 @@ Translator::TRANSLATORSTATE LDFPixieTranslator::Parse(std::unique_ptr<std::vecto
 			this->CustomLeftovers[ii].pop_front();
 			this->LeftoverSpillIDs[ii].pop_front();
 
-			this->EvtSpillCounter[spill % this->NUMCONCURRENTSPILLS] -= 1;
+			--this->EvtSpillCounter[spill % this->NUMCONCURRENTSPILLS];
 		}
+	}
+	for(size_t ii = 0; ii < this->CustomLeftovers.size(); ++ii){
+		if( this->CustomLeftovers[ii].empty() ){
+			continue;
+		}
+		this->console->info("Module {} has {} leftover events",ii,this->CustomLeftovers[ii].size());
 	}
 	// Re-sort the RawEvents vector
 	if( RawEvents->size() > 0 ){
@@ -150,7 +160,10 @@ Translator::TRANSLATORSTATE LDFPixieTranslator::Parse(std::unique_ptr<std::vecto
 			[](const std::unique_ptr<DDASRootHit>& a, const std::unique_ptr<DDASRootHit>& b) {return *a < *b;}
 		);
 	}
-	return Translator::TRANSLATORSTATE::COMPLETE;
+	if (this->FinishedCurrentFile && this->FinishedReadingFiles) {
+		return Translator::TRANSLATORSTATE::COMPLETE;
+	}
+	return Translator::TRANSLATORSTATE::PARSING;
 }
 
 int LDFPixieTranslator::ParseDirBuffer(){
@@ -254,6 +267,7 @@ int LDFPixieTranslator::ParseDataBuffer(uint32_t& nBytes,bool& full_spill,bool& 
 		if( this->CurrDataBuff.buffhead == HRIBF_TYPES::ENDFILE ){
 			if( this->CurrDataBuff.nextbuffhead == HRIBF_TYPES::ENDFILE ){
 				this->console->info("Read double EOF");
+				this->FinishedCurrentFile = true;
 				// End of file, this should be the goal.
 				return 2;
 			}else{
@@ -304,6 +318,8 @@ int LDFPixieTranslator::ParseDataBuffer(uint32_t& nBytes,bool& full_spill,bool& 
 					return 5;
 				}
 				//memcpy(&data_[nBytes],&curr_buffer[buff_pos],8)
+				// this->console->info("Found spill footer chunk {} of {}, size {} at spill {}",current_chunk_num+1,total_num_chunks,this_chunk_sizeB, this->CurrSpillID);
+				this->console->info("Found spill footer at offset 0x{:X}", this->CurrentFile.tellg());
 				uint32_t nWords = 2;
 				for( uint32_t ii = 0; ii < nWords; ++ii ){
 					this->databuffer.push_back(this->CurrDataBuff[this->CurrDataBuff.buffpos+ii]);
@@ -327,7 +343,7 @@ int LDFPixieTranslator::ParseDataBuffer(uint32_t& nBytes,bool& full_spill,bool& 
 				++this->CurrDataBuff.goodchunks;
 				copied_bytes = this_chunk_sizeB - 12;
 				//memcpy(&data_[nBytes],&curr_buffer[buff_pos],copied_bytes);
-				uint32_t nWords = copied_bytes/4;
+				const uint32_t nWords = copied_bytes/4; // max words is uint32_t_MAX so this should be safe
 				for( uint32_t ii = 0; ii < nWords; ++ii ){
 					this->databuffer.push_back(this->CurrDataBuff[this->CurrDataBuff.buffpos+ii]);
 				}
@@ -383,20 +399,27 @@ int LDFPixieTranslator::ReadNextBuffer(bool force){
 
 // UnpackData for the current spill
 int LDFPixieTranslator::UnpackData(uint32_t& nBytes,bool& full_spill,bool& bad_spill,std::vector<bool>& entriesread){
+	if(bad_spill){
+		this->console->info("Bad Spill, skipping unpacking");
+	}
+	if(!full_spill){
+		this->console->info("Incomplete Spill, skipping unpacking");
+	}
 
 	this->console->info("Unpacking Data for Spill ID : {}",this->CurrSpillID);
-	this->console->info("nBytes : {}",nBytes);
 	uint32_t nWords = nBytes/4;
+	// this->console->info("nBytes : {}\tnWords: {}\tBufferSize: {}",nBytes,nWords, this->databuffer.size());
 	uint32_t nWords_read = 0;
 	uint32_t spillLength = 0xFFFFFFFF;
 	uint32_t vsn = 0xFFFFFFFF;
 	std::unique_ptr<DDASRootHit> currentHit;
 	ddasfmt::DDASHitUnpacker unpacker;
 	uint32_t eventLength = 0;
+
 	// auto currsize = this->Leftovers.size();
 	this->NTotalWords += nWords;
 	while( nWords_read+1 < this->databuffer.size() ){
-		while( this->databuffer[nWords_read] == 0xFFFFFFFF ){
+		while( nWords_read < this->databuffer.size() && this->databuffer[nWords_read] == 0xFFFFFFFF ){
 			++nWords_read;
 		}
 		if(nWords_read+1>=this->databuffer.size()){
@@ -414,7 +437,7 @@ int LDFPixieTranslator::UnpackData(uint32_t& nBytes,bool& full_spill,bool& bad_s
 		}
 
 		if( vsn < 14 ){
-			//this->console->info("{} {}",spillLength,vsn);
+			// module FIFO read as empty
 			if( spillLength == 2 ){
 				nWords_read += spillLength;
 				continue;
@@ -426,25 +449,34 @@ int LDFPixieTranslator::UnpackData(uint32_t& nBytes,bool& full_spill,bool& bad_s
 					// UNPACKING DATA HERE!!!
 					// Check that we have enough data to read the event header
 					if (buffpos >= this->databuffer.size()) {
-						this->console->critical("buffpos {} out of databuffer bounds {}", buffpos, this->databuffer.size());
+						this->console->critical("buffpos 0x{:X} out of databuffer bounds {}", buffpos, this->databuffer.size());
 						throw std::runtime_error("buffpos out of bounds in UnpackData");
 					}
 					// Use the first word to get the module number, crate number
 					AddDDASWords(buffpos, eventLength, entriesread);
-					spillEnd += 2;
-					this->console->info("buffpos : {} spillEnd : {} databuffer size : {}", buffpos, spillEnd, this->databuffer.size()/sizeof(uint32_t));
+					// Create new temporary buffer to pass to the unpacker, leaving the original buffer without the new words.
+					// this->console->info("buffpos : 0x{:X} spillEnd : 0x{:X} databuffer size : 0x{:X}", buffpos, spillEnd, this->databuffer.size()/sizeof(uint32_t));
 					// Bounds check before using eventLength
 					if (eventLength == 0 || buffpos + eventLength > this->databuffer.size()) {
 						this->console->critical("Invalid eventLength {} at buffpos {} (databuffer size: {})", eventLength, buffpos, this->databuffer.size());
 						throw std::runtime_error("eventLength out of bounds in UnpackData");
 					}
-					firstWords = &(this->databuffer[buffpos]);
+					firstWords = &(this->databuffer[buffpos-2]);
 
 					// Allocate a new DDASRootHit object and unpack the data
 					currentHit.reset(new DDASRootHit());
 
-					const uint32_t* finish = unpacker.unpack(firstWords, firstWords+eventLength, *currentHit);
-					if (finish-firstWords != eventLength) {
+					const uint32_t* finish = unpacker.unpack(firstWords, firstWords+eventLength+2, *currentHit);
+
+					// this->console->info("ch: {} slot: {} crate: {} time: {} energy: {} event#: {} totalEvents: {}", 
+					// 	currentHit->getChannelID(), 
+					// 	currentHit->getSlotID(), 
+					// 	currentHit->getCrateID(), 
+					// 	currentHit->getTime(), 
+					// 	currentHit->getEnergy(),
+					// 	eventsInMod,
+					// 	eventsInSpill);
+					if (finish-firstWords != eventLength+2) {
 						this->console->error("Unpacked event length {} does not match expected length {}", finish-firstWords, eventLength);
 						throw std::runtime_error("Unpacked event length does not match expected length");
 					}
@@ -452,8 +484,8 @@ int LDFPixieTranslator::UnpackData(uint32_t& nBytes,bool& full_spill,bool& bad_s
 					buffpos += eventLength;
 
 					if(currentHit){
-						if(currentHit->getSlotID() < CustomLeftovers.size()){
-							size_t slotID = static_cast<size_t>(currentHit->getSlotID());
+						if(currentHit->getSlotID()-2 < CustomLeftovers.size()){
+							size_t slotID = static_cast<size_t>(currentHit->getSlotID()-2); // Slot IDs start at 2 in the data, but our vector starts at 0
 							this->CustomLeftovers[slotID].push_back(std::move(currentHit));
 
 							this->LeftoverSpillIDs[slotID].push_back(this->CurrSpillID);
@@ -467,7 +499,6 @@ int LDFPixieTranslator::UnpackData(uint32_t& nBytes,bool& full_spill,bool& bad_s
 							// throw std::runtime_error("currentHit is null in UnpackData");
 					}
 				}
-				this->console->info("Finished unpacking spill ID : {} with {} words read", this->CurrSpillID, spillLength);
 				nWords_read += spillLength;
 			}
 
@@ -476,7 +507,6 @@ int LDFPixieTranslator::UnpackData(uint32_t& nBytes,bool& full_spill,bool& bad_s
 			//auto finalsize = this->Leftovers.size();
 			//this->EvtSpillCounter[this->CurrSpillID%this->NUMCONCURRENTSPILLS] = (finalsize - currsize);
 			//this->console->info("evts added {}",(finalsize-currsize));
-			this->console->info("spill : {} words : {} Total words : {}",this->CurrSpillID,nWords,this->NTotalWords);
 			++(this->CurrSpillID);
 			this->databuffer.clear();
 			break;
@@ -518,18 +548,30 @@ int LDFPixieTranslator::CountBuffersWithData() const{
 }
 
 void LDFPixieTranslator::AddDDASWords(const uint32_t&buffpos, uint32_t&eventLength, std::vector<bool>& entriesread){
+	// Check bounds before accessing databuffer
+	if (buffpos < 2 || buffpos >= this->databuffer.size()) {
+		this->console->critical("buffpos {} out of valid range for AddDDASWords (databuffer size: {})", buffpos, this->databuffer.size());
+		throw std::runtime_error("buffpos out of valid range in AddDDASWords");
+	}
+	
 	const uint32_t firstWord = this->databuffer[buffpos];
 	
-	eventLength = ((firstWord & 0x3FFE0000)>>17) + 2;
-	uint32_t DDASWord1 = eventLength*2;
+	eventLength = ((firstWord & 0x3FFE0000)>>17);
+	uint32_t DDASWord1 = (eventLength + 2)*2;
 
 	std::pair<uint32_t, uint32_t> moduleCratePair(((firstWord & 0x00000F00) >> 8), ((firstWord & 0x000000F0) >> 4));
+	
+	// Bounds check for entriesread access
+	if (moduleCratePair.second < 2 || (moduleCratePair.second - 2) >= entriesread.size()) {
+		this->console->critical("Invalid crate number {} for entriesread access (size: {})", moduleCratePair.second, entriesread.size());
+		throw std::runtime_error("Invalid crate number in AddDDASWords");
+	}
 	entriesread[moduleCratePair.second-2] = true;
 	
 	// get modArray which has the msps, ADC resolution, and the hardware revision.
 	const std::array<uint32_t, 3> modArray = CmdOpts.mod_params_map[moduleCratePair];
 	uint32_t DDASWord2 = (modArray[0] & 0xFFFF)|((modArray[1]<<16)&0x00FF0000)|((modArray[2]<<24)&0xFF000000);
 
-	this->databuffer.insert(this->databuffer.begin() + buffpos, DDASWord1);
-	this->databuffer.insert(this->databuffer.begin() + buffpos + 1, DDASWord2);
+	this->databuffer.at(buffpos-2) = DDASWord1;
+	this->databuffer.at(buffpos-1) = DDASWord2;
 }

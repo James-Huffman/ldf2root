@@ -51,6 +51,8 @@ class Translator{
 		size_t NumFilesRemaining;
 		size_t CurrentFileIndex;
 		bool FinishedCurrentFile;
+		bool FirstFile;
+		bool LastFile;
 
 		bool LastReadEvtWithin;
 		std::vector<std::deque<std::unique_ptr<DDASRootHit>>> CustomLeftovers;

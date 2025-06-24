@@ -110,7 +110,7 @@ class LDFPixieTranslator : public Translator{
 		uint64_t PrevTimeStamp;
 		bool FinishedReadingFiles;
 
-		const int NUMCONCURRENTSPILLS = 3;
+		const int NUMCONCURRENTSPILLS = 100;
 		std::vector<int> EvtSpillCounter;
 
 		unsigned int NTotalWords;
