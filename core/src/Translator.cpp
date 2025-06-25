@@ -15,8 +15,8 @@ Translator::Translator(const std::string& log,const std::string& translatorname)
 	this->LastReadEvtWithin = false;
 	this->CurrExtTS = std::numeric_limits<uint64_t>::max();
 
-	this->CustomLeftovers = std::vector<std::deque<std::unique_ptr<DDASRootHit>>>(13);
-	this->LeftoverSpillIDs = std::vector<std::deque<uint64_t>>(13);
+	// this->CustomLeftovers = std::vector<std::deque<std::unique_ptr<ddasfmt::DDASHit>>>(13);
+	// this->LeftoverSpillIDs = std::vector<std::deque<uint64_t>>(13);
 }
 
 Translator::~Translator(){
@@ -37,7 +37,7 @@ bool Translator::AddFile(const std::string& filename){
 	}
 }
 
-[[noreturn]] Translator::TRANSLATORSTATE Translator::Parse([[maybe_unused]] std::unique_ptr<std::vector<std::unique_ptr<DDASRootHit>>>& RawEvents){
+[[noreturn]] Translator::TRANSLATORSTATE Translator::Parse([[maybe_unused]] std::vector<uint32_t>* RawEvents){
 	this->console->error("Called Translator::Parse(), not the overload");
 	throw std::runtime_error("Called Translator::Parse(), not the overload");
 }

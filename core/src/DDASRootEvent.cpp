@@ -22,6 +22,7 @@
  */ 
 
 #include "DDASRootEvent.h"
+
 #include "DDASRootHit.h"
 
 DDASRootEvent::DDASRootEvent() : TObject(), m_data() {}
@@ -34,13 +35,10 @@ DDASRootEvent::DDASRootEvent(const DDASRootEvent& obj)
     : TObject(obj), m_data()
 {
     // Create new copies of the DDASRootHit events
-    for (const auto& hitPtr : obj.m_data) {
-        if (hitPtr) {
-            m_data.push_back(std::make_unique<DDASRootHit>(*hitPtr));
-        } else {
-            m_data.push_back(nullptr);
-        }
+    for (UInt_t i = 0; i < m_data.size(); ++i) {
+        m_data[i] = new DDASRootHit(*obj.m_data[i]);
     }
+    
 }
 
 /**
@@ -56,15 +54,16 @@ DDASRootEvent::DDASRootEvent(const DDASRootEvent& obj)
 DDASRootEvent& DDASRootEvent::operator=(const DDASRootEvent& obj)
 {
     if (this != &obj) {
-        m_data.clear();
-        for (const auto& hitPtr : obj.m_data) {
-            if (hitPtr) {
-                m_data.push_back(std::make_unique<DDASRootHit>(*hitPtr));
-            } else {
-                m_data.push_back(nullptr);
-            }
+        // Create new copies of the DDASRootHit events
+        for (UInt_t i = 0; i < m_data.size(); ++i) {
+            delete m_data[i];
+        }
+        m_data.resize(obj.m_data.size());
+        for (UInt_t i = 0; i < m_data.size(); ++i) {
+            m_data[i] = new DDASRootHit(*obj.m_data[i]);
         }
     }
+
     return *this;
 }
 
@@ -72,7 +71,10 @@ DDASRootEvent& DDASRootEvent::operator=(const DDASRootEvent& obj)
  * @details
  * Deletes the objects stored in m_data and clear the vector.
  */
-DDASRootEvent::~DDASRootEvent(){}
+DDASRootEvent::~DDASRootEvent()
+{
+    Reset();
+}
 
 /**
  * @details
@@ -80,22 +82,9 @@ DDASRootEvent::~DDASRootEvent(){}
  * check that the object pointed to by the argument exists, so that it is 
  * the user's responsibility to implement.
  */
-void DDASRootEvent::AddChannelData(std::unique_ptr<DDASRootHit> channel){
-    if (channel) {
-        m_data.push_back(std::move(channel));
-    }
-}
-void DDASRootEvent::AddChannelData(std::shared_ptr<DDASRootHit> channel){
-    if (channel) {
-        m_data.push_back(std::make_unique<DDASRootHit>(*channel));
-    }
-}
-
-void DDASRootEvent::AddChannelData(DDASRootHit* channel) {
-    if (!channel) {
-        return; // Avoid adding a null pointer
-    }
-    m_data.push_back(std::make_unique<DDASRootHit>(*channel));
+void DDASRootEvent::AddChannelData(DDASRootHit* channel)
+{
+    m_data.push_back(channel);
 }
 
 /**
@@ -106,12 +95,12 @@ void DDASRootEvent::AddChannelData(DDASRootHit* channel) {
  */ 
 Double_t DDASRootEvent::GetFirstTime() const
 {
-    // Check if m_data is empty before accessing front()
-    if (m_data.empty()) {
-        return 0; // Return 0 if no data exists
+    Double_t time = 0;
+    if (m_data.size() > 0) { 
+        time = m_data.front()->getTime();
     }
     
-    return m_data.front()->getTime();
+    return time;
 }
 
 /**
@@ -122,12 +111,12 @@ Double_t DDASRootEvent::GetFirstTime() const
  */
 Double_t DDASRootEvent::GetLastTime() const
 {
-    // Check if m_data is empty before accessing back()
-    if (m_data.empty()) {
-        return 0; // Return 0 if no data exists
+    Double_t time = 0;
+    if (m_data.size() > 0) { 
+        time = m_data.back()->getTime();
     }
     
-    return m_data.back()->getTime();
+    return time;
 }
 
 /**
@@ -145,7 +134,13 @@ Double_t DDASRootEvent::GetTimeWidth() const
  * Deletes the DDASRootHit data objects and resets the  size of the extensible 
  * data array to zero. 
  */
-void DDASRootEvent::Reset(){
+void DDASRootEvent::Reset()
+{
+    // Delete all of the object stored in m_data
+    for (UInt_t i = 0; i < m_data.size(); ++i) {
+        delete m_data[i];
+    }
+    
     // Clear the array and resize it to zero
     m_data.clear();
 }

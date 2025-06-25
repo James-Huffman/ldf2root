@@ -14,9 +14,11 @@
 // Include necessary system headers
 #include <Compression.h>
 #include <cstddef>
+#include <cstdint>
 #include <iostream>
 #include <ostream>
 #include <string>
+#include <sys/types.h>
 #include <vector>
 #include <fstream>
 #include <sstream>
@@ -44,8 +46,17 @@
 #include "InputParser.h"
 #include "DDASRootHit.h"
 #include "DDASRootEvent.h"
+#include "DDASHitUnpacker.h"
 
-void EventBuild(std::unique_ptr<std::vector<std::unique_ptr<DDASRootHit>>>& hitList, DDASRootEvent& rawEvent, ldf2root::CmdOptions opts, TTree* tout, const std::string& logname);
+using chrono_duration = std::chrono::duration<double>;
+
+typedef std::vector<std::unique_ptr<DDASRootHit>> UnpackedHitVector;
+typedef std::vector<uint32_t> RawDataVector;
+
+void AddDDASWords(const uint32_t&, uint32_t&, std::vector<bool>& );
+chrono_duration EventBuild(UnpackedHitVector*, DDASRootEvent&,ldf2root::CmdOptions , TTree* , const std::string& );
+chrono_duration SortEvents(UnpackedHitVector* );
+chrono_duration UnpackEvents(RawDataVector*,UnpackedHitVector*);
 
 void generate_default_config(const std::string& filename = "example_config.txt") {
     std::ofstream ofs(filename);
@@ -251,7 +262,8 @@ int main(int argc, char* argv[]) {
   TTree* tout = new TTree(opts.tree_name.c_str(), "DDAS Unpacked Data");
 
   // Prepare DDASHit vector and branch
-  auto rawHits = std::make_unique<std::vector<std::unique_ptr<DDASRootHit>>>();
+  auto rawData = std::make_unique<RawDataVector>();
+  auto unpackedData = std::make_unique<UnpackedHitVector>();
   DDASRootEvent dEvent;
   if (opts.legacy) {
     // Legacy format: TTree name "dchan" with a branch "ddasevent
@@ -268,17 +280,27 @@ int main(int argc, char* argv[]) {
   try {
     do{
       // Step 2: parse the entire LDF file into DDASRootHit objects + store them in rawHits in time order
-      CurrState = dataparser->Parse(rawHits);
-      fout->cd();
-      console->critical("Parsed {} hits from {} input files.", rawHits->size(), opts.input_files.size());
-      EventBuild(rawHits, dEvent, opts, tout,logname);
-      console->info("Event Building complete, parsing next group");
-      rawHits->clear();
+      CurrState = dataparser->Parse(rawData.get());
     } while (CurrState == Translator::TRANSLATORSTATE::PARSING);
+      console->info("Finished parsing all input files, now unpacking hits.");
+      auto unpackTime = UnpackEvents(rawData.get(), unpackedData.get());
+      console->info("Unpacking complete, {} hits unpacked in {} seconds.", unpackedData->size(), unpackTime.count());
+      console->info("Unpacked {} hits from {} input files.", unpackedData->size(), opts.input_files.size());
+
+      console->info("Sorting hits...");
+      auto sortTime = SortEvents(unpackedData.get());
+      console->info("Sorting complete, {} hits sorted in {} seconds.", unpackedData->size(), sortTime.count());
+      fout->cd();
+      auto eventBuildTime = EventBuild(unpackedData.get(), dEvent, opts, tout,logname);
+      console->info("Event building complete, {} hits processed in {} seconds.", unpackedData->size(), eventBuildTime.count());
+      console->info("Event Building complete, parsing next group");
+
     // console->info("Finished parsing {} hits from {} input files.", rawHits->size(), opts.input_files.size());
     // Step 3: Repack the DDASRootHit objects into DDASRootEvent objects and write them to the output ROOT file.
+    console->info("Writing output to ROOT file: {}", opts.output_file);
     tout->Write("",TObject::kOverwrite);
     fout->Close();
+    console->info("Write Complete!", opts.output_file);
   } catch(std::runtime_error const& e) {
     console->error(e.what());
     return 1;
@@ -289,27 +311,33 @@ int main(int argc, char* argv[]) {
 	const auto mins = std::chrono::duration_cast<std::chrono::minutes>(global_run_time - hrs);
 	const auto secs = std::chrono::duration_cast<std::chrono::seconds>(global_run_time - hrs - mins);
 	const auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(global_run_time - hrs - mins - secs);
-	console->info("Finished converting in {} hours {} minutes {} seconds {} milliseconds",hrs.count(),mins.count(),secs.count(),ms.count());
-	console->critical("All data has been written to {}.root",outfile_stem);
+	console->info("Conversion complete in {} hours {} minutes {} seconds {} milliseconds",hrs.count(),mins.count(),secs.count(),ms.count());
 
   return 0;
 }
 
-void EventBuild(std::unique_ptr<std::vector<std::unique_ptr<DDASRootHit>>>& hitList, DDASRootEvent& dEvent,const ldf2root::CmdOptions opts, TTree* tout, const std::string& logname) {
+chrono_duration EventBuild(UnpackedHitVector* hitList, DDASRootEvent& dEvent,const ldf2root::CmdOptions opts, TTree* tout, const std::string& logname) {
   // Create a DDASRootEvent object to hold the unpacked data
-  // std::chrono::time_point<std::chrono::high_resolution_clock> start_time = std::chrono::high_resolution_clock::now();
-  // auto console = spdlog::get(logname)->clone("EventBuilder");
+  std::chrono::time_point<std::chrono::high_resolution_clock> start_time = std::chrono::high_resolution_clock::now();
+  auto console = spdlog::get(logname)->clone("EventBuilder");
 
   Double_t lastTime = 0.0;
-  std::vector<std::unique_ptr<DDASRootHit>>::iterator it = hitList.get()->begin();
+  int prog = 10;
+  const size_t numHits = hitList->size();
+  const auto interval = numHits/prog;
   // Loop through each hit in the hitList
   switch(opts.build_window_type) {
     case (ldf2root::WindowType::FLAT):
-      // console->info("Building events with flat window type.");
+      console->info("Building events with flat window type.");
       // For flat window, we can just fill the TTree with all hits
-      for(; it != hitList->end(); ++it) {
+      for(size_t i = 0; i < numHits; ++i) {
+        if(i%interval == 0) {
+          console->info("Progress: {}%", prog);
+          prog += 10;
+        }
         dEvent.Reset();
-        dEvent.AddChannelData(std::move(*it));
+        auto currentHit = (*hitList).at(i).release();
+        dEvent.AddChannelData(currentHit);
         tout->Fill();
       }
       break;
@@ -317,18 +345,23 @@ void EventBuild(std::unique_ptr<std::vector<std::unique_ptr<DDASRootHit>>>& hitL
     case (ldf2root::WindowType::ROLLING):
       // For rolling window, we need to keep track of the last event time
       lastTime = 0.0;
-      // console->info("Building events with rolling window type and build window of {} nanoseconds.", opts.build_window);
-      for(; it != hitList->end(); ++it) {  
+      console->info("Building events with rolling window type and build window of {} nanoseconds.", opts.build_window);
+      for(size_t i=0; i < numHits; ++i) {
+        if(i%interval == 0) {
+          console->info("Progress: {}%", prog);
+          prog += 10;
+        }
         // Access m_time from the base class ddasfmt::DDASHit
-        auto currentHit = std::move(*it);
+        auto currentHit = (*hitList).at(i).release();
+        lastTime = currentHit->getTime();
         if (std::fabs(currentHit->getTime() - lastTime) < opts.build_window) {
-          dEvent.AddChannelData(std::move(currentHit));
+          dEvent.AddChannelData(currentHit);
           lastTime = currentHit->getTime();
         } else {
           // Fill the TTree with the current event
           tout->Fill();
           dEvent.Reset();
-          dEvent.AddChannelData(std::move(currentHit));
+          dEvent.AddChannelData(currentHit);
           lastTime = currentHit->getTime();
         }
       }
@@ -337,30 +370,74 @@ void EventBuild(std::unique_ptr<std::vector<std::unique_ptr<DDASRootHit>>>& hitL
     
     case (ldf2root::WindowType::FIXED):
       // For fixed window, we need to keep track of the last event time
-      // console->info("Building events with fixed window type and build window of {} nanoseconds.", opts.build_window);
+      console->info("Building events with fixed window type and build window of {} nanoseconds.", opts.build_window);
       lastTime = 0.0;
-      for(; it != hitList->end(); ++it) {  
+            for(size_t i=0; i < numHits; ++i) {
+        if(i%interval == 0) {
+          console->info("Progress: {}%", prog);
+          prog += 10;
+        }
         // Access m_time from the base class ddasfmt::DDASHit
-        auto currentHit = std::move(*it);
+        auto currentHit = (*hitList).at(i).release();
+        lastTime = currentHit->getTime();
         if (std::fabs(currentHit->getTime() - lastTime) < opts.build_window) {
-          dEvent.AddChannelData(std::move(currentHit));
+          dEvent.AddChannelData(currentHit);
         } else {
           // Fill the TTree with the current event
           tout->Fill();
           dEvent.Reset();
-          dEvent.AddChannelData(std::move(currentHit));
+          dEvent.AddChannelData(currentHit);
           lastTime = currentHit->getTime();
         }
       }
       tout->Fill(); // Fill the last event
       break;
-
-    default:
-      std::cerr << "Unknown window type specified." << std::endl;
-      return;
   }
+  
+  // Clean up memory
   dEvent.Reset();
-  // std::chrono::time_point<std::chrono::high_resolution_clock> end_time = std::chrono::high_resolution_clock::now();
-  // std::chrono::duration<double> elapsed_seconds = end_time - start_time;
-  // console->critical("Event build completed in {} seconds.", elapsed_seconds.count());
+  std::chrono::duration<double> elapsed_seconds = std::chrono::high_resolution_clock::now() - start_time;
+  return elapsed_seconds;
+}
+
+chrono_duration UnpackEvents(RawDataVector* rawData, UnpackedHitVector* unpackedData) {
+  std::chrono::time_point<std::chrono::high_resolution_clock> start_time = std::chrono::high_resolution_clock::now();
+  ddasfmt::DDASHitUnpacker unpacker;
+
+  uint32_t totalWords = rawData->size();
+  const uint32_t* dataPtr = rawData->data();
+
+  uint32_t processedWords = 0;
+  
+  while(processedWords<totalWords) {
+    
+    // Read the event length from the raw data
+    uint32_t eventLength = *dataPtr;
+    // Create a new DDASRootHit object for each unpacked hit
+    auto currentHit = std::make_unique<DDASRootHit>();
+    // Unpack the raw data into the current hit
+    unpacker.unpack(dataPtr, dataPtr + eventLength, *currentHit);
+    
+    // Add the unpacked hit to the unpacked data vector
+    unpackedData->push_back(std::move(currentHit));
+    dataPtr += eventLength/2; // Move the pointer to the next event
+    processedWords += eventLength/2;
+  }
+  // Clear the raw data after unpacking
+  rawData->clear();
+  std::chrono::duration<double> elapsed_seconds = std::chrono::high_resolution_clock::now() - start_time;
+  return elapsed_seconds; // Return the time taken to unpack the data
+}
+
+
+chrono_duration SortEvents(UnpackedHitVector* unpackedData) {
+  std::chrono::time_point<std::chrono::high_resolution_clock> start_time = std::chrono::high_resolution_clock::now();
+  // Sort the unpacked data by time
+	if( unpackedData->size() > 0 ){
+		std::sort(unpackedData->begin(),unpackedData->end(),
+			[](const std::unique_ptr<DDASRootHit>& a, const std::unique_ptr<DDASRootHit>& b) {return *a < *b;}
+		);
+  }
+  std::chrono::duration<double> elapsed_seconds = std::chrono::high_resolution_clock::now() - start_time;
+  return elapsed_seconds; // Return the time taken to sort the data
 }

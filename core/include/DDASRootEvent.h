@@ -25,7 +25,6 @@
 
 #include <TObject.h>
 #include <vector>
-#include <memory>
 
 class DDASRootHit;
 
@@ -59,7 +58,7 @@ class DDASRootHit;
 class DDASRootEvent : public TObject
 {
 private:
-    std::vector<std::unique_ptr<DDASRootHit>> m_data; //!< Extensible array of hit objects.
+    std::vector<DDASRootHit*> m_data; //!< Extensible array of hit objects.
 
 public:
     /** @brief Default constructor. */
@@ -82,7 +81,7 @@ public:
      * @brief Access internal, extensible array of channel data.
      * @return Vector of dynamically allocated DDASRootHits.
      */ 
-    std::vector<std::unique_ptr<DDASRootHit>>& GetData() { return m_data;}
+    std::vector<DDASRootHit*>& GetData() { return m_data;}
     /**
      * @brief Return the number of hits in this event.
      * @return The number of hits in the event (size of the event vector).
@@ -92,8 +91,6 @@ public:
      * @brief Append channel data to event.
      * @param channel Pointer to a DDASRootHit object to append.
      */
-    void AddChannelData(std::unique_ptr<DDASRootHit> channel);
-    void AddChannelData(std::shared_ptr<DDASRootHit> channel);
     void AddChannelData(DDASRootHit* channel);
     /** 
      * @brief Get timestamp of first channel datum.

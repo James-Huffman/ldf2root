@@ -23,8 +23,8 @@
 #ifndef DDASROOTHIT_H
 #define DDASROOTHIT_H
 
+#include <DDASHit.h>
 #include <TObject.h>
-#include "DDASHit.h"
 
 /** 
  * @todo (ASC 3/26/24): Enforce some consistent namespace business here:

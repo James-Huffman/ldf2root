@@ -12,17 +12,9 @@
 #include <spdlog/sinks/basic_file_sink.h>
 #include <spdlog/sinks/stdout_color_sinks.h>
 
-// #include <boost/container/devector.hpp>
-
-// #include "ChannelMap.hpp"
-
-// #include "Correlator.hpp"
 #include "Translator.h"
 #include "InputParser.h"
-#include "DDASRootHit.h"
 
-
-// #include "PhysicsData.hpp"
 
 class DataParser{
 	public:
@@ -40,10 +32,8 @@ class DataParser{
 		~DataParser() = default;
 		void SetInputFiles(std::vector<std::string>&);
 		
-		Translator::TRANSLATORSTATE Parse(std::unique_ptr<std::vector<std::unique_ptr<DDASRootHit>>>& RawEvents);
+		Translator::TRANSLATORSTATE Parse(std::vector<uint32_t>* RawEvents);
 
-		// void SetChannelMap(const std::shared_ptr<ChannelMap>&);
-		// void SetCorrelator(const std::shared_ptr<Correlator>&);
 	private:
 		DataFileType DataType;
 		std::shared_ptr<spdlog::logger> console;
@@ -52,8 +42,6 @@ class DataParser{
 		ldf2root::CmdOptions CmdOpts;
 
 		std::unique_ptr<Translator> DataTranslator;
-		// std::shared_ptr<ChannelMap> CMap;
-		// std::shared_ptr<Correlator> correlator;
 };
 
 #endif

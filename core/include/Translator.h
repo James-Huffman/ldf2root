@@ -5,7 +5,6 @@
 #include <string>
 #include <fstream>
 #include <vector>
-#include <deque>
 
 #include <spdlog/common.h>
 #include <spdlog/spdlog.h>
@@ -14,14 +13,6 @@
 #include <spdlog/sinks/basic_file_sink.h>
 #include <spdlog/sinks/stdout_color_sinks.h>
 
-// #include <boost/container/devector.hpp>
-// #include <boost/container/vector.hpp>
-// #include <boost/container/deque.hpp>
-
-// #include "BitDecoder.h"
-// #include "ChannelMap.hpp"
-
-#include "DDASRootHit.h"
 
 /// @addtogroup Decoding
 /// @{
@@ -36,7 +27,7 @@ class Translator{
 		Translator(const std::string&,const std::string&);
 		virtual ~Translator();
 		virtual bool AddFile(const std::string&);
-		[[noreturn]] virtual TRANSLATORSTATE Parse([[maybe_unused]] std::unique_ptr<std::vector<std::unique_ptr<DDASRootHit>>>&);
+		[[noreturn]] virtual TRANSLATORSTATE Parse([[maybe_unused]] std::vector<uint32_t>*);
 		virtual void FinalizeFiles();
 		virtual bool OpenNextFile();
 
@@ -55,15 +46,8 @@ class Translator{
 		bool LastFile;
 
 		bool LastReadEvtWithin;
-		std::vector<std::deque<std::unique_ptr<DDASRootHit>>> CustomLeftovers;
-		std::vector<std::deque<uint64_t>> LeftoverSpillIDs;
-		// boost::container::vector<boost::container::deque<PhysicsData>> CustomLeftovers;
 
 		std::shared_ptr<spdlog::logger> console;
-		// std::shared_ptr<ChannelMap> CMap;
-		// std::shared_ptr<Correlator> correlator;
-
-		// XiaDecoder* CurrDecoder;
 
 		uint64_t CurrExtTS;
 };

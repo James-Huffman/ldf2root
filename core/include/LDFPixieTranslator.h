@@ -12,18 +12,17 @@ Processing from this point will be done by the DDASHitUnpacker, which will take 
 #define __LDF_PIXIE_TRANSLATOR_H__
 
 #include <string>
-#include <memory>
+#include <vector>
 
 #include "Translator.h"
 
 #include "InputParser.h"
-#include "DDASRootHit.h"
 
 class LDFPixieTranslator : public Translator{
 	public:
 		LDFPixieTranslator(const std::string&,const std::string&, const ldf2root::CmdOptions& cmdopts);
 		~LDFPixieTranslator();
-		Translator::TRANSLATORSTATE Parse(std::unique_ptr<std::vector<std::unique_ptr<DDASRootHit>>>& RawEvents);
+		Translator::TRANSLATORSTATE Parse(std::vector<uint32_t>* RawData);
 
 		enum HRIBF_TYPES{
 			HEAD = 1145128264,
@@ -96,7 +95,7 @@ class LDFPixieTranslator : public Translator{
 		int ReadNextBuffer(bool force = false);
 		int ParseDataBuffer(unsigned int&,bool&,bool&);
 
-		int UnpackData(unsigned int&,bool&,bool&,std::vector<bool>& );
+		int UnpackData(std::vector<uint32_t>*, uint32_t&, bool&, bool&);
 		int CountBuffersWithData() const;
 
 
@@ -110,22 +109,16 @@ class LDFPixieTranslator : public Translator{
 		uint64_t PrevTimeStamp;
 		bool FinishedReadingFiles;
 
-		const int NUMCONCURRENTSPILLS = 100;
+		const int NUMCONCURRENTSPILLS = 10000; //!!! This is dangerous, but our program only calls 1 2GB file at a time.
 		std::vector<int> EvtSpillCounter;
 
 		unsigned int NTotalWords;
 
-		//std::map<uint64_t,int> EvtSpillCounter;
-		//Increment when we find spill footer
 		uint64_t CurrSpillID;
 
-
-		// Added for unpacking DDASHit objects
 		ldf2root::CmdOptions CmdOpts;
+		void TransferRawDataWords(std::vector<uint32_t>* rawData, uint32_t& buffpos);
 
-		void AddDDASWords(const uint32_t&buffpos, uint32_t&eventLength, std::vector<bool>& entriesread);
-
-		
 };
 
 #endif
