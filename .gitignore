@@ -2,3 +2,5 @@ working
 build
 install
 testcase.txt
+.cache
+compile_commands.json
